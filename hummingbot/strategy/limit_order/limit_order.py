@@ -29,6 +29,20 @@ class LimitOrder(StrategyPyBase):
         self._order_completed = False
         self.add_markets([market_info.market])
 
+    async def format_status(self) -> str:
+        """
+        Method called by the `status` command. Generates the status report for this strategy.
+        Simply outputs the balance of the specified asset on the exchange.
+        """
+        if not self._ready:
+            return "Exchange connector(s) are not ready."
+        lines = []
+
+        lines.extend(["", "  Assets:"] + ["    " + str(self._asset) + "    " +
+                                          str(self._exchange.get_balance(self._asset))])
+
+        return "\n".join(lines)
+
     # After initializing the required variables, we define the tick method.
     # The tick method is the entry point for the strategy.
     def tick(self, timestamp: float):
