@@ -5,6 +5,12 @@ from hummingbot.core.event.events import OrderType
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.logger import HummingbotLogger
 from hummingbot.strategy.strategy_py_base import StrategyPyBase
+from hummingbot.core.data_type.common import (
+    OrderType,
+    PriceType,
+    TradeType
+)
+from hummingbot.strategy.order_book_asset_price_delegate import OrderBookAssetPriceDelegate
 
 hws_logger = None
 
@@ -25,23 +31,37 @@ class LimitOrder(StrategyPyBase):
 
         super().__init__()
         self._market_info = market_info
+        self._price_delegate = OrderBookAssetPriceDelegate(market_info.market, market_info.trading_pair)
         self._connector_ready = False
         self._order_completed = False
         self.add_markets([market_info.market])
+        
 
-    async def format_status(self) -> str:
+    def format_status(self) -> str:
         """
         Method called by the `status` command. Generates the status report for this strategy.
         Simply outputs the balance of the specified asset on the exchange.
         """
-        if not self._ready:
+        if not self._connector_ready:
             return "Exchange connector(s) are not ready."
-        lines = []
-
-        lines.extend(["", "  Assets:"] + ["    " + str(self._asset) + "    " +
-                                          str(self._exchange.get_balance(self._asset))])
-
-        return "\n".join(lines)
+        market, trading_pair, base_asset, quote_asset = self._market_info
+        price = self._price_delegate.get_price_by_type(PriceType.MidPrice)
+        base_balance = float(market.get_balance(base_asset))
+        quote_balance = float(market.get_balance(quote_asset))
+        available_base_balance = float(market.get_available_balance(base_asset))
+        available_quote_balance = float(market.get_available_balance(quote_asset))
+        base_value = base_balance * float(price)
+        total_in_quote = base_value + quote_balance
+        base_ratio = base_value / total_in_quote if total_in_quote > 0 else 0
+        quote_ratio = quote_balance / total_in_quote if total_in_quote > 0 else 0
+        data = [
+            ["", base_asset, quote_asset],
+            ["Total Balance", round(base_balance, 4), round(quote_balance, 4)],
+            ["Available Balance", round(available_base_balance, 4), round(available_quote_balance, 4)],
+            [f"Current Value ({quote_asset})", round(base_value, 4), round(quote_balance, 4)],
+            ["Current %", f"{base_ratio:.1%}", f"{quote_ratio:.1%}"]
+        ]
+        return "\n".join(data)
 
     # After initializing the required variables, we define the tick method.
     # The tick method is the entry point for the strategy.
